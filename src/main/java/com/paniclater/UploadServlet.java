@@ -23,7 +23,7 @@ maxRequestSize = 41_943_040L // 40MB
 )
 public class UploadServlet extends HttpServlet {
 	private Map<Integer, UploadedFile> uploadedFileDatabase = new LinkedHashMap<>();
-	private volatile int TICKET_ID_SEQUENCE = 1;
+	private volatile int FILE_ID_SEQUENCE = 0;
 
 	@Override
 	public void destroy() {
@@ -38,13 +38,14 @@ public class UploadServlet extends HttpServlet {
 			action = "list";
 		switch (action) {
 		case "upload":
-			this.showForm(resp);
+			this.showForm(req, resp);
 			break;
 		case "download":
 			this.downloadFile(req, resp);
+			break;
 		case "list":
 		default:
-			this.listUploadedFiles(resp);
+			this.listUploadedFiles(req, resp);
 			break;
 		}
 	}
@@ -61,16 +62,18 @@ public class UploadServlet extends HttpServlet {
 		resp.sendRedirect("upload");
 	}
 
-	private void downloadFile(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-		int id = Integer.parseInt(req.getParameter("id"));		
+	private void downloadFile(HttpServletRequest req, HttpServletResponse resp)
+			throws IOException {
+		int id = Integer.parseInt(req.getParameter("id"));
 		UploadedFile file = this.uploadedFileDatabase.get(id);
-		if(file == null) return;
+		if (file == null)
+			return;
 		resp.setHeader("Content-Disposition",
-                "attachment; filename=" + file.getName());
-        resp.setContentType("application/octet-stream");
+				"attachment; filename=" + file.getName());
+		resp.setContentType("application/octet-stream");
 
-        ServletOutputStream stream = resp.getOutputStream();
-        stream.write(file.getContents());
+		ServletOutputStream stream = resp.getOutputStream();
+		stream.write(file.getContents());
 	}
 
 	private byte[] filePartToByteArray(Part filePart) throws IOException {
@@ -92,43 +95,33 @@ public class UploadServlet extends HttpServlet {
 		System.out.println("Starting upload servlet");
 	}
 
-	private void listUploadedFiles(HttpServletResponse resp) throws IOException {
+	private void listUploadedFiles(HttpServletRequest req, HttpServletResponse resp) throws IOException, ServletException {
 		System.out.println("Listing uploaded Files");
-		PrintWriter writer = this.writeHeader(resp);
-		writer.append("<h2>Uploaded Files</h2>\r\n");
-		writer.append("<a href=\"upload?action=upload\">Upload A File").append(
-				"</a><br/><br/>\r\n");
-		if (this.uploadedFileDatabase.size() == 0
-				|| this.uploadedFileDatabase == null) {
-			writer.append("<p>There have been no uploaded files</p>");
-		} else {
-			writer.append("<ul>");
-			for (UploadedFile file : this.uploadedFileDatabase.values()) {
-				writer.append("<li>" + file.getName()
-						+ " <a href=\"upload?action=download&id="
-						+ file.getId() + "\">download</a></li>");
-			}
-			writer.append("</ul>");
-		}
-		this.writeFooter(writer);
+		req.setAttribute("uploadedFileDatabase", this.uploadedFileDatabase);
+		req.getRequestDispatcher("/WEB-INF/jsp/view/listUploadedFiles.jsp").forward(req, resp);
+//		PrintWriter writer = this.writeHeader(resp);
+//		writer.append("<h2>Uploaded Files</h2>\r\n");
+//		writer.append("<a href=\"upload?action=upload\">Upload A File").append(
+//				"</a><br/><br/>\r\n");
+//		if (this.uploadedFileDatabase.size() == 0
+//				|| this.uploadedFileDatabase == null) {
+//			writer.append("<p>There have been no uploaded files</p>");
+//		} else {
+//			writer.append("<ul>");
+//			for (UploadedFile file : this.uploadedFileDatabase.values()) {
+//				writer.append("<li>" + file.getName()
+//						+ " <a href=\"upload?action=download&id="
+//						+ file.getId() + "\">download</a></li>");
+//			}
+//			writer.append("</ul>");
+//		}
+//		this.writeFooter(writer);
 	}
 
-	private void showForm(HttpServletResponse resp) throws IOException {
-		PrintWriter writer = this.writeHeader(resp);
-		writer.append("<h2>Upload a File</h2>\r\n");
-		writer.append("<form method=\"POST\" action=\"upload\" ").append(
-				"enctype=\"multipart/form-data\">\r\n");
-		writer.append("<input type=\"hidden\" name=\"action\" ").append(
-				"value=\"upload\"/>\r\n");
-		writer.append("File Name<br/>\r\n");
-		writer.append("<input type=\"text\" name=\"fileName\"/><br/><br/>\r\n");
-		writer.append("<b>File</b><br/>\r\n");
-		writer.append("<input type=\"file\" name=\"file\"/><br/><br/>\r\n");
-		writer.append("<input type=\"submit\" value=\"Submit\"/>\r\n");
-		writer.append("</form>\r\n");
-
-		this.writeFooter(writer);
-
+	private void showForm(HttpServletRequest req, HttpServletResponse resp)
+			throws IOException, ServletException {
+		req.getRequestDispatcher("/WEB-INF/jsp/view/uploadFileForm.jsp")
+				.forward(req, resp);
 	}
 
 	private void uploadFile(HttpServletRequest req, HttpServletResponse resp)
@@ -136,7 +129,6 @@ public class UploadServlet extends HttpServlet {
 		UploadedFile file = new UploadedFile();
 		file.setName(req.getParameter("fileName"));
 		Part filePart = req.getPart("file");
-		req.getParameterMap();
 		if (filePart == null || filePart.getSize() <= 0) {
 			throw new IOException("No file or empty file");
 		}
@@ -147,7 +139,7 @@ public class UploadServlet extends HttpServlet {
 		}
 		int id;
 		synchronized (this) {
-			id = this.TICKET_ID_SEQUENCE++;
+			id = this.FILE_ID_SEQUENCE++;
 			file.setId(id);
 			this.uploadedFileDatabase.put(id, file);
 		}
